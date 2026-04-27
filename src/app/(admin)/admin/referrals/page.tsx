@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { toast } from "sonner";
 import { RefreshCw } from "lucide-react";
@@ -8,7 +8,11 @@ import { Button } from "@/components/ui/button";
 import { ReferralStatsCards } from "@/components/admin/referrals/ReferralStatsCards";
 import { PendingPayoutsTable } from "@/components/admin/referrals/PendingPayoutsTable";
 import { MarkAsPaidModal } from "@/components/admin/referrals/MarkAsPaidModal";
-import { api } from "@/lib/api";
+import {
+  getReferralStats,
+  getPendingPayouts,
+  updateReferralStatus,
+} from "@/lib/mock-db";
 import {
   setStatsLoading,
   setStatsData,
@@ -18,6 +22,7 @@ import {
   setPayoutsError,
   setSelectedReferral,
   resetMarkingState,
+  updatePayoutInList,
 } from "@/store/referralSlice";
 import type { PendingPayout } from "@/store/referralSlice";
 
@@ -35,12 +40,11 @@ export default function ReferralsPage() {
   const fetchStats = useCallback(async () => {
     dispatch(setStatsLoading(true));
     try {
-      const { data } = await api.get("/admin/referral/stats");
+      const data = getReferralStats();
       dispatch(setStatsData(data));
+      dispatch(setStatsLoading(false));
     } catch (error) {
-      const err = error as { response?: { data?: { error: string } } };
-      const errorMessage =
-        err?.response?.data?.error || "Failed to fetch referral stats";
+      const errorMessage = "Failed to fetch referral stats";
       dispatch(setStatsError(errorMessage));
       toast.error(errorMessage);
     }
@@ -49,12 +53,11 @@ export default function ReferralsPage() {
   const fetchPayouts = useCallback(async () => {
     dispatch(setPayoutsLoading(true));
     try {
-      const { data } = await api.get("/admin/referral/payouts");
-      dispatch(setPayoutsData(data.data || data));
+      const payouts = getPendingPayouts();
+      dispatch(setPayoutsData(payouts));
+      dispatch(setPayoutsLoading(false));
     } catch (error) {
-      const err = error as { response?: { data?: { error: string } } };
-      const errorMessage =
-        err?.response?.data?.error || "Failed to fetch pending payouts";
+      const errorMessage = "Failed to fetch pending payouts";
       dispatch(setPayoutsError(errorMessage));
       toast.error(errorMessage);
     }
@@ -76,7 +79,12 @@ export default function ReferralsPage() {
   };
 
   const handleMarkPaidSuccess = () => {
-    fetchPayouts();
+    if (selectedReferral) {
+      updateReferralStatus(selectedReferral.id, "paid");
+      dispatch(updatePayoutInList(selectedReferral.id));
+      fetchPayouts();
+      fetchStats();
+    }
   };
 
   const handleRefresh = async () => {
@@ -88,11 +96,9 @@ export default function ReferralsPage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Referral Management
-          </h1>
+          <h1 className="text-3xl font-bold tracking-tight">Pending Payouts</h1>
           <p className="text-gray-600 mt-2">
-            Manage vendor referrals and process payouts
+            Review all pending referrals and process payout approvals.
           </p>
         </div>
         <Button

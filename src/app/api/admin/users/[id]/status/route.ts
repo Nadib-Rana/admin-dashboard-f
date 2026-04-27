@@ -11,7 +11,7 @@ const statusSchema = z.object({
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const token =
     request.headers.get("authorization")?.replace("Bearer ", "") ?? null;
@@ -21,7 +21,7 @@ export async function PATCH(
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = params;
+  const { id } = await params;
   const payload = await request.json();
   const parsed = statusSchema.safeParse(payload);
 

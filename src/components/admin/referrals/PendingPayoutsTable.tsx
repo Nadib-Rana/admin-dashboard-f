@@ -1,7 +1,5 @@
 "use client";
 
-import { formatDistanceToNow } from "date-fns";
-import { ChevronDown, DollarSign } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -13,6 +11,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PendingPayout } from "@/store/referralSlice";
+
+import { useState, useMemo } from "react";
+import { ViewReferredVendorsModal } from "./ViewReferredVendorsModal";
+import { DollarSign } from "lucide-react";
+
+type ReferrerGroup = {
+  referrer: { id: string; fullName: string; email: string };
+  payouts: PendingPayout[];
+  totalBonus: number;
+  count: number;
+};
 
 interface PendingPayoutsTableProps {
   payouts: PendingPayout[];
@@ -27,6 +36,35 @@ export function PendingPayoutsTable({
   onMarkPaid,
   isMarking,
 }: PendingPayoutsTableProps) {
+  const [selectedReferrer, setSelectedReferrer] =
+    useState<ReferrerGroup | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const groupedPayouts = useMemo(() => {
+    const groups = new Map();
+    payouts.forEach((payout) => {
+      const key = payout.referrer.id;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          referrer: payout.referrer,
+          payouts: [],
+          totalBonus: 0,
+          count: 0,
+        });
+      }
+      const group = groups.get(key);
+      group.payouts.push(payout);
+      group.totalBonus += payout.bonusAmount;
+      group.count += 1;
+    });
+    // Apply bonus for referrers with more than 10 referrals: $5 per refer
+    groups.forEach((group) => {
+      if (group.count > 10) {
+        group.totalBonus += group.count * 5;
+      }
+    });
+    return Array.from(groups.values());
+  }, [payouts]);
   if (isLoading) {
     return (
       <Card>
@@ -64,65 +102,59 @@ export function PendingPayoutsTable({
           <TableHeader>
             <TableRow className="bg-gray-50">
               <TableHead className="font-semibold">Referrer</TableHead>
-              <TableHead className="font-semibold">Referred Vendor</TableHead>
               <TableHead className="font-semibold text-right">
-                Bonus Amount
+                Number of Referred Vendors
               </TableHead>
-              <TableHead className="font-semibold">Referred Date</TableHead>
+              <TableHead className="font-semibold text-right">
+                Total Bonus Amount
+              </TableHead>
               <TableHead className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {payouts.map((payout) => (
-              <TableRow key={payout.id} className="hover:bg-gray-50">
+            {groupedPayouts.map((group) => (
+              <TableRow key={group.referrer.id} className="hover:bg-gray-50">
                 <TableCell>
                   <div>
                     <p className="font-medium text-gray-900">
-                      {payout.referrer.fullName}
+                      {group.referrer.fullName}
                     </p>
                     <p className="text-sm text-gray-500">
-                      {payout.referrer.email}
+                      {group.referrer.email}
                     </p>
                   </div>
                 </TableCell>
-                <TableCell>
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      {payout.referredVendor.user.fullName}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {payout.referredVendor.user.email}
-                    </p>
-                  </div>
-                </TableCell>
+                <TableCell className="text-right">{group.count}</TableCell>
                 <TableCell className="text-right">
                   <span className="inline-flex items-center px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold">
-                    ${payout.bonusAmount.toFixed(2)}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <span className="text-sm text-gray-600">
-                    {formatDistanceToNow(new Date(payout.createdAt), {
-                      addSuffix: true,
-                    })}
+                    ${group.totalBonus.toFixed(2)}
                   </span>
                 </TableCell>
                 <TableCell className="text-right">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => onMarkPaid(payout)}
-                    disabled={isMarking}
+                    onClick={() => {
+                      setSelectedReferrer(group);
+                      setIsModalOpen(true);
+                    }}
                     className="w-full sm:w-auto"
                   >
-                    <span>Mark as Paid</span>
-                    <ChevronDown className="w-4 h-4 ml-2" />
+                    View All
                   </Button>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+        <ViewReferredVendorsModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          referrer={selectedReferrer?.referrer}
+          payouts={selectedReferrer?.payouts || []}
+          onMarkPaid={onMarkPaid}
+          isMarking={isMarking}
+        />
       </div>
     </Card>
   );

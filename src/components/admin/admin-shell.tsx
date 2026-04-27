@@ -11,6 +11,7 @@ import {
   Users,
   FileClock,
   TrendingUp,
+  DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -34,10 +35,15 @@ type NavItem = {
 const navItems: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/users", label: "Users", icon: Users },
-  { href: "/admin/referrals", label: "Referrals", icon: Shield },
+  { href: "/admin/referrals", label: "Pending Payouts", icon: Shield },
+  {
+    href: "/admin/referrals/all",
+    label: "All Referral Records",
+    icon: DollarSign,
+  },
   {
     href: "/admin/all-referrals",
-    label: "All User Referrals",
+    label: "Referral Summary",
     icon: TrendingUp,
   },
   { href: "/admin/audit-logs", label: "Audit Logs", icon: FileClock },

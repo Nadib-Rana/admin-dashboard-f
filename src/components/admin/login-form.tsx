@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { setSession } from "@/store/authSlice";
 import { useAppDispatch } from "@/store";
+import { UserRole } from "@/types/admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,7 +50,7 @@ export function LoginForm() {
           id: string;
           fullName: string | null;
           email: string;
-          role: "super_admin";
+          role: UserRole.super_admin;
         };
       };
 

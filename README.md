@@ -36,6 +36,8 @@ This workspace has been rebuilt as a Super Admin-only Next.js application.
 - `/admin` — dashboard overview
 - `/admin/users` — user management
 - `/admin/audit-logs` — audit logs
+- `/admin/referrals` — referral payouts management
+- `/admin/referrals/all` — comprehensive referral management
 
 ## API endpoints
 
@@ -44,6 +46,28 @@ This workspace has been rebuilt as a Super Admin-only Next.js application.
 - `GET /api/admin/users`
 - `PATCH /api/admin/users/:id/status`
 - `GET /api/admin/audit-logs`
+- `GET /api/admin/referrals` (planned)
+- `PATCH /api/admin/referrals/:id/status` (planned)
+- `PATCH /api/admin/referrals/:id/note` (planned)
+
+## Referral Management System
+
+A comprehensive referral bonus management system has been implemented with the following features:
+
+- **Referral Tracking**: Track all referral relationships between users and vendors
+- **Bonus Management**: Calculate referral bonuses with extra incentives for high-volume referrers
+- **Payout Processing**: Mark referrals as paid with timestamp tracking
+- **Admin Notes**: Add administrative notes to referral records
+- **Data Export**: Export referral data to CSV for reporting
+- **Mock Data**: Currently using demo data for development and testing
+
+### Bonus Calculation Logic
+
+- Base bonus per referral (stored in database)
+- Extra $5 bonus per referral for referrers with 10+ total referrals
+- Formula: `totalBonus = sum(baseBonuses) + (referralCount >= 10 ? referralCount * 5 : 0)`
+
+For detailed documentation including database schema, API specifications, component architecture, and setup instructions, see: **[REFERRAL_SYSTEM_DOCUMENTATION.md](REFERRAL_SYSTEM_DOCUMENTATION.md)**
 
 ## Demo credentials
 

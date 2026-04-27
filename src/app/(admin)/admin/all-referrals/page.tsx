@@ -94,10 +94,10 @@ export default function AllReferralsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
-            All User Referrals
+            Referral Summary
           </h1>
           <p className="text-gray-600 mt-2">
-            View referral performance across all users
+            See the referral performance summary for every user.
           </p>
         </div>
         <div className="flex gap-2">

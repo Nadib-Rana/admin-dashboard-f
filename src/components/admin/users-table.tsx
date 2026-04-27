@@ -40,8 +40,14 @@ export function UsersTable() {
         const response = await api.get("/admin/users");
         if (!active) return;
 
-        setUsers(response.data.users);
-        setCurrentUserId(response.data.currentUserId);
+        setUsers(
+          (response as { data: { users: any[]; currentUserId: string } }).data
+            .users,
+        );
+        setCurrentUserId(
+          (response as { data: { users: any[]; currentUserId: string } }).data
+            .currentUserId,
+        );
       } finally {
         if (active) setLoading(false);
       }
@@ -91,7 +97,12 @@ export function UsersTable() {
       setUsers((current) =>
         current.map((item) =>
           item.id === user.id
-            ? { ...item, isActive: response.data.user.isActive }
+            ? {
+                ...item,
+                isActive: (
+                  response as { data: { user: { isActive: boolean } } }
+                ).data.user.isActive,
+              }
             : item,
         ),
       );

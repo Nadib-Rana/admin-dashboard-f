@@ -1,0 +1,575 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  moduleFormat    = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+// --- Enums ---
+enum UserRole {
+  super_admin
+  customer
+  vendor
+  staff
+}
+
+enum BookingStatus {
+  pending
+  waiting
+  confirmed
+  completed
+  cancelled
+}
+
+enum BookingType {
+  virtual
+  in_person
+}
+
+enum StaffScheduleStatus {
+  blocked
+  released
+}
+
+enum ServiceType {
+  service
+  event
+  class
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+}
+
+enum PayoutStatus {
+  pending
+  paid
+}
+
+enum TokenType {
+  email_verification
+  password_reset
+  login_otp
+}
+
+// --- Models ---
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  fullName      String?   @map("full_name")
+  email         String    @unique
+  password      String
+  role          UserRole
+  referralCode  String?   @unique @map("referral_code")
+  bonusBalance  Decimal   @default(0) @map("bonus_balance") @db.Decimal(10, 2)
+  isActive      Boolean   @default(true) @map("is_active")
+  phone         String?   // optional phone number for user
+  /// Stores MinIO object key for profile image (not full URL). Format: users/{userId}/profile-{timestamp}
+  profileImage  String?   @map("profile_image")
+  isVerified    Boolean   @default(false) @map("is_verified")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  customer             Customer?
+  vendor               Vendor?
+  staff                Staff?
+  notifications        Notification[]
+  notificationSettings NotificationSetting?
+  referralsMade        Referral[] @relation("Referrer")
+  adminAuditLogs       AuditLog[] @relation("AdminAuditLogs")
+  verificationTokens   VerificationToken[]
+  userDevices          UserDevice[]
+
+  @@map("users")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  adminId   String   @map("admin_id") @db.Uuid
+  admin     User     @relation("AdminAuditLogs", fields: [adminId], references: [id])
+  action    String
+  targetId  String   @map("target_id")
+  details   String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([adminId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model VerificationToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  user      User      @relation(fields: [userId], references: [id])
+  token     String    @unique
+  type      TokenType
+  expiresAt DateTime
+  used      Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  @@map("verification_tokens")
+}
+
+model UserDevice {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  user        User      @relation(fields: [userId], references: [id])
+  deviceId    String    @map("device_id") // Unique device identifier
+  fcmToken    String?   @map("fcm_token") // Firebase Cloud Messaging token
+  deviceType  String?   @map("device_type") // ios, android, web
+  deviceName  String?   @map("device_name") // Human readable device name
+  isActive    Boolean   @default(true) @map("is_active")
+  lastSeenAt  DateTime? @map("last_seen_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@unique([userId, deviceId])
+  @@map("user_devices")
+}
+
+model Customer {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @unique @map("user_id") @db.Uuid
+  user         User      @relation(fields: [userId], references: [id])
+  referralCode String?   @map("referral_code")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  bookings    Booking[]
+  waitingList WaitingList[]
+  reviews     Review[]
+  favorites   Favorite[]
+
+  @@map("customers")
+}
+
+model Vendor {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @unique @map("user_id") @db.Uuid
+  user          User      @relation(fields: [userId], references: [id])
+  referralCode  String?   @map("referral_code")
+  referredBy    String?   @map("referred_by") @db.Uuid
+  referralCount Int       @default(0) @map("referral_count")
+  bonusBalance  Decimal   @default(0) @map("bonus_balance") @db.Decimal(10, 2)
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  businesses    Business[]
+  importanceInfos ImportanceInfo[]
+  referralsRecv Referral[] @relation("ReferredVendor")
+  subscriptions Subscription[]
+  payments      Payment[]
+
+  @@map("vendors")
+}
+
+model Business {
+  id          String    @id @default(uuid()) @db.Uuid
+  vendorId    String    @map("vendor_id") @db.Uuid
+  vendor      Vendor    @relation(fields: [vendorId], references: [id])
+ 
+  //Business will be create using category.
+  categoryId String? @map("category_id") @db.Uuid
+  category Category? @relation(fields: [categoryId], references: [id])
+  
+  name        String
+  description String?
+  /// Stores MinIO object key for logo (not full URL). Format: businesses/{businessId}/logo-{timestamp}
+  logoKey     String?   @map("logo")
+  location    String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  workingDays Json? @map("working_days")
+
+  // Relations
+  images     BusinessImage[]
+  staff      Staff[]
+  services   Service[]
+  bookings   Booking[]
+  staffSchedules StaffSchedule[]
+  guests     GuestCustomer[]
+  reviews    Review[]
+  favoritedBy Favorite[]
+
+  // Indexes for common queries
+  @@index([categoryId])
+  @@index([vendorId])
+
+  @@map("businesses")
+}
+
+model BusinessImage {
+  id         String   @id @default(uuid()) @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Stores MinIO object key (not full URL). Format: businesses/{businessId}/images/{key}
+  imageKey   String   @map("image_url")
+
+  @@map("business_images")
+}
+
+model ImportanceInfo {
+  id               String   @id @default(uuid()) @db.Uuid
+  vendorId         String   @map("vendor_id") @db.Uuid
+  vendor           Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  title            String
+  credentialKey    String   @map("credential_key")
+  credentialValue  String   @map("credential_value") @db.Text
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([vendorId])
+  @@map("importance_info")
+}
+
+model Staff {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @unique @map("user_id") @db.Uuid
+  user        User     @relation(fields: [userId], references: [id])
+  businessId  String   @map("business_id") @db.Uuid
+  business    Business @relation(fields: [businessId], references: [id])
+  role        String?
+  specialties String?
+  /// Stores MinIO object key for staff profile image (not full URL). Format: staff/{staffId}/profile-{timestamp}
+  image       String?  @map("image")
+  workingDays Json?    @map("working_days")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  services StaffService[]
+  bookings Booking[]
+  schedules StaffSchedule[]
+
+  @@map("staff")
+}
+
+model Category {
+  id   String @id @default(uuid()) @db.Uuid
+  name String
+  /// Stores MinIO object key for category image (not full URL). Format: categories/{categoryId}/image-{timestamp}
+  image String?
+
+  // Relations
+  businesses Business[]
+  services Service[]
+
+  @@map("categories")
+}
+
+model Service {
+  id          String      @id @default(uuid()) @db.Uuid
+  businessId  String      @map("business_id") @db.Uuid
+  business    Business    @relation(fields: [businessId], references: [id])
+  categoryId  String?      @map("category_id") @db.Uuid
+  category    Category?    @relation(fields: [categoryId], references: [id])
+  title       String
+  description String?
+  price       Decimal     @db.Decimal(10, 2)
+  duration    Int // Duration in minutes
+  color       String?
+  type        ServiceType
+  serviceImage String?    @map("service_image")
+  location     String?
+  seat         Int?
+
+  // Relations
+  staff       StaffService[]
+  bookings    Booking[]
+  schedules   StaffSchedule[]
+  waitingList WaitingList[]
+
+  @@map("services")
+}
+
+model StaffService {
+  staffId   String  @map("staff_id") @db.Uuid
+  staff     Staff   @relation(fields: [staffId], references: [id])
+  serviceId String  @map("service_id") @db.Uuid
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  @@id([staffId, serviceId])
+  @@map("staff_services")
+}
+
+model Booking {
+  id           String        @id @default(uuid()) @db.Uuid
+  customerId   String?       @map("customer_id") @db.Uuid
+  customer     Customer?     @relation(fields: [customerId], references: [id])
+
+  guestId      String?       @map("guest_id") @db.Uuid
+  guest        GuestCustomer? @relation(fields: [guestId], references: [id], onDelete: SetNull)
+
+  businessId   String        @map("business_id") @db.Uuid
+  business     Business      @relation(fields: [businessId], references: [id])
+
+  serviceId    String        @map("service_id") @db.Uuid
+  service      Service       @relation(fields: [serviceId], references: [id])
+
+  staffId      String?        @map("staff_id") @db.Uuid
+  staff        Staff?         @relation(fields: [staffId], references: [id])
+
+  bookingType  BookingType   @map("booking_type")
+  title        String?
+  status       BookingStatus
+  date         DateTime      @db.Date
+  startTime    DateTime      @map("start_time") @db.Time
+  endTime      DateTime      @map("end_time") @db.Time
+  cancelReason String?       @map("cancel_reason")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  // Relations
+  reviews      Review[]
+  payments     Payment[]
+  notifications Notification[]
+  staffSchedule StaffSchedule?
+  guests       Guest[]
+
+  @@map("bookings")
+}
+
+model Guest {
+  id        String   @id @default(uuid()) @db.Uuid
+  bookingId String   @map("booking_id") @db.Uuid
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  name      String
+  phone     String?  @map("phone")
+  email     String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([bookingId])
+  @@map("guests")
+}
+
+model StaffSchedule {
+  id         String              @id @default(uuid()) @db.Uuid
+  bookingId  String              @unique @map("booking_id") @db.Uuid
+  booking    Booking             @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  businessId String              @map("business_id") @db.Uuid
+  business   Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  serviceId  String              @map("service_id") @db.Uuid
+  service    Service             @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  staffId    String              @map("staff_id") @db.Uuid
+  staff      Staff               @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  date       DateTime            @db.Date
+  startTime  DateTime            @map("start_time") @db.Time
+  endTime    DateTime            @map("end_time") @db.Time
+  status     StaffScheduleStatus @default(blocked)
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+
+  @@index([staffId, date, startTime, endTime])
+  @@index([businessId, date])
+  @@index([serviceId, date])
+  @@map("staff_schedules")
+}
+
+model WaitingList {
+  id            String   @id @default(uuid()) @db.Uuid
+  customerId    String   @map("customer_id") @db.Uuid
+  customer      Customer @relation(fields: [customerId], references: [id])
+  serviceId     String   @map("service_id") @db.Uuid
+  service       Service  @relation(fields: [serviceId], references: [id])
+  preferredDate DateTime @map("preferred_date") @db.Date
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("waiting_list")
+}
+
+model GuestCustomer {
+  id         String   @id @default(uuid()) @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  business   Business @relation(fields: [businessId], references: [id])
+  
+  name       String
+  phone      String?  @map("phone")
+  email      String?
+  company    String?  @map("company")
+  address    String?  @map("address")
+  city       String?  @map("city")
+  state      String?  @map("state")
+  zipCode    String?  @map("zip_code")
+  
+  /// Stores MinIO object key for guest profile image (not full URL). Format: guests/{guestId}/profile-{timestamp}
+  image      String?  @map("image")
+  
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  bookings   Booking[]
+
+  @@index([businessId, phone])
+  @@index([businessId, email])
+  @@index([businessId])
+
+  @@map("guest_customers")
+}
+
+model Review {
+  id         String   @id @default(uuid()) @db.Uuid
+
+  bookingId  String   @map("booking_id") @db.Uuid
+  booking    Booking  @relation(fields: [bookingId], references: [id])
+
+  customerId String   @map("customer_id") @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  businessId String   @map("business_id") @db.Uuid
+  business   Business @relation(fields: [businessId], references: [id])
+
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  
+  @@map("reviews")
+}
+
+model Favorite {
+  id         String   @id @default(uuid()) @db.Uuid
+
+  customerId String   @map("customer_id") @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  businessId String   @map("business_id") @db.Uuid
+  business   Business @relation(fields: [businessId], references: [id])
+
+  // Unique constraint to prevent duplicate favorites
+  @@unique([customerId, businessId])
+  
+  // Index on customerId for fast lookups when fetching customer's favorites
+  @@index([customerId])
+
+  @@map("favorites")
+}
+
+enum NotificationDeliveryStatus {
+  pending
+  sent
+  failed
+}
+
+enum NotificationChannel {
+  email
+  sms
+  push
+}
+
+model Notification {
+  id             String                     @id @default(uuid()) @db.Uuid
+
+  userId         String                     @map("user_id") @db.Uuid
+  user           User                       @relation(fields: [userId], references: [id])
+  
+  bookingId      String?                    @map("booking_id") @db.Uuid
+  booking        Booking?                   @relation(fields: [bookingId], references: [id])
+  
+  title          String
+  message        String
+  type           String
+  channel        NotificationChannel
+  deliveryStatus NotificationDeliveryStatus @default(pending) @map("delivery_status")
+  sentAt         DateTime?                  @map("sent_at")
+  retryCount     Int                        @default(0) @map("retry_count")
+  isRead         Boolean                    @default(false) @map("is_read")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
+
+model NotificationSetting {
+  id                String  @id @default(uuid()) @db.Uuid
+  userId            String  @unique @map("user_id") @db.Uuid
+  user              User    @relation(fields: [userId], references: [id])
+  emailNotification Boolean @default(true) @map("email_notifications")
+  smsNotification   Boolean @default(true) @map("sms_notifications")
+  pushNotification  Boolean @default(true) @map("push_notifications")
+  bookingReminders  Boolean @default(true) @map("booking_reminders")
+  reminder24h       Boolean @default(true) @map("reminder_24h")
+  reminder1h        Boolean @default(true) @map("reminder_1h")
+
+  @@map("notification_settings")
+}
+
+model NotificationTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  type        String   // e.g., booking_confirmation, appointment_reminder, cancellation
+  subject     String?
+  body        String
+  variables   Json?    // e.g., { "customerName": "{{customerName}}", "appointmentTime": "{{appointmentTime}}" }
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("notification_templates")
+}
+
+model Referral {
+  id               String   @id @default(uuid()) @db.Uuid
+  referrerUserId   String   @map("referrer_user_id") @db.Uuid
+  referrer         User     @relation("Referrer", fields: [referrerUserId], references: [id])
+  referredVendorId String   @map("referred_vendor_id") @db.Uuid
+  referredVendor   Vendor   @relation("ReferredVendor", fields: [referredVendorId], references: [id])
+  bonusAmount      Decimal  @map("bonus_amount") @db.Decimal(10, 2)
+  payoutStatus     PayoutStatus @default(pending) @map("payout_status")
+  adminNote        String?  @map("admin_note")
+  paidAt           DateTime? @map("paid_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@unique([referredVendorId])
+  @@index([referrerUserId, payoutStatus])
+  @@map("referrals")
+}
+
+model SubscriptionPlan {
+  id       String @id @default(uuid()) @db.Uuid
+  name     String
+  price    Decimal @db.Decimal(10, 2)
+  maxUsers Int    @map("max_users")
+  features String?
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  vendorId  String   @map("vendor_id") @db.Uuid
+  vendor    Vendor   @relation(fields: [vendorId], references: [id])
+  planId    String   @map("plan_id") @db.Uuid
+  plan      SubscriptionPlan @relation(fields: [planId], references: [id])
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  status    String
+
+  @@map("subscriptions")
+}
+
+model Payment {
+  id            String        @id @default(uuid()) @db.Uuid
+  bookingId     String?       @map("booking_id") @db.Uuid
+  booking       Booking?      @relation(fields: [bookingId], references: [id])
+  vendorId      String        @map("vendor_id") @db.Uuid
+  vendor        Vendor        @relation(fields: [vendorId], references: [id])
+  amount        Decimal       @db.Decimal(10, 2)
+  paymentMethod String        @map("payment_method")
+  paymentStatus PaymentStatus @map("payment_status")
+  transactionId String?       @map("transaction_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  @@map("payments")
+}

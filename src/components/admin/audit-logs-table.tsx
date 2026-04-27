@@ -32,7 +32,7 @@ export function AuditLogsTable() {
         const response = await api.get("/admin/audit-logs");
         if (!active) return;
 
-        setLogs(response.data.logs);
+        setLogs((response as { data: { logs: any[] } }).data.logs);
       } finally {
         if (active) setLoading(false);
       }
