@@ -11,7 +11,7 @@ dist
 # code coverage
 coverage
 *.lcov
-package-lock.json
+
 # logs
 logs
 _.log
