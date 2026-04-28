@@ -18,6 +18,7 @@ export type AdminUserRecord = {
   password: string;
   role: UserRole;
   isActive: boolean;
+  bonusBalance?: number;
   createdAt: string;
 };
 

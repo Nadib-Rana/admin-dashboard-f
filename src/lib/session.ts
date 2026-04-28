@@ -36,3 +36,17 @@ export function getUserIdFromToken(token: string | null | undefined) {
   const match = token.match(/^sa-token-(.+)$/);
   return match?.[1] ?? null;
 }
+
+export function getSessionUserIdFromAuthorizationOrCookie(
+  authorization: string | null,
+  cookieValue: string | null,
+) {
+  const token = authorization?.replace("Bearer ", "") ?? null;
+  const session = getSessionFromCookieValue(cookieValue ?? "");
+
+  if (session?.userId) {
+    return session.userId;
+  }
+
+  return getUserIdFromToken(token);
+}

@@ -208,36 +208,67 @@ Referrer with 12 referrals:
 
 ## API Endpoints
 
-### Get All Referrals
+All referral admin endpoints are protected for super admin access via the application auth flow. Requests are authenticated using the `super_admin_session` cookie or a `Bearer` token in the format `sa-token-<userId>`.
+
+### Referral Stats
 
 ```
-GET /api/admin/referrals
-Response: { referrals: Referral[] }
+GET /api/admin/referral/stats
+Response:
+{
+  "totalReferrals": number,
+  "referralVendors": number,
+  "convertedSubscriptions": number
+}
 ```
 
-### Update Referral Status
+### All User Referrals
 
 ```
-PATCH /api/admin/referrals/{id}/status
-Body: { payoutStatus: "pending" | "paid" }
-Response: { referral: Referral }
+GET /api/admin/all/user/refferls
+Response: [
+  {
+    "userName": string,
+    "email": string,
+    "totalReferralVendors": number,
+    "convertedSubscriptions": number,
+    "bonus": string
+  }
+]
 ```
 
-### Update Admin Note
+### Pending Payouts
 
 ```
-PATCH /api/admin/referrals/{id}/note
-Body: { adminNote: string }
-Response: { referral: Referral }
+GET /api/admin/referral/payouts
+Response: PendingPayout[]
 ```
+
+### Mark Referral as Paid
+
+```
+PATCH /api/admin/referral/:id/mark-paid
+Content-Type: application/json
+Body: {
+  "adminNote": "TXN-12345"
+}
+```
+
+Behavior:
+
+- Sets `payoutStatus` to `paid`
+- Sets `paidAt` to the current timestamp
+- Stores optional `adminNote`
+- Decrements the referrer user's `bonusBalance` by `bonusAmount`
+- Creates an audit log entry with action `referral_marked_paid`
 
 ### Backend Implementation Notes
 
-1. **Authentication**: All endpoints require admin authentication
-2. **Authorization**: Only super_admin role can access
-3. **Validation**: Use Zod schemas for request validation
-4. **Database**: Use Prisma ORM for database operations
-5. **Relations**: Include User and Vendor relations in queries
+1. **Authentication**: Protected for super admin only
+2. **Authorization**: `super_admin` role enforced in API guards
+3. **Request Validation**: `zod` is used for payload validation
+4. **Mock Data**: The current admin app uses `src/lib/mock-db.ts` for demo referral data
+5. **Audit Logs**: Payout actions are recorded in `state.auditLogs`
 
 ## User Interface
 

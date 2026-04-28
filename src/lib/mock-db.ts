@@ -22,6 +22,22 @@ function generateUUID(): string {
   });
 }
 
+function createAuditLogEntry(
+  adminId: string,
+  action: string,
+  targetId: string,
+  details?: string,
+) {
+  return {
+    id: generateUUID(),
+    adminId,
+    action,
+    targetId,
+    details: details ?? null,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 export type ReferralRecord = {
   id: string;
   referrerUserId: string;
@@ -45,6 +61,7 @@ const superAdminUser: AdminUserRecord = {
   password: "Admin@1234",
   role: UserRole.super_admin,
   isActive: true,
+  bonusBalance: 110.0,
   createdAt: "2026-04-01T08:00:00.000Z",
 };
 
@@ -57,6 +74,7 @@ const seedUsers: AdminUserRecord[] = [
     password: "vendor123",
     role: UserRole.vendor,
     isActive: true,
+    bonusBalance: 25.0,
     createdAt: "2026-04-08T09:30:00.000Z",
   },
   {
@@ -66,6 +84,7 @@ const seedUsers: AdminUserRecord[] = [
     password: "customer123",
     role: UserRole.customer,
     isActive: true,
+    bonusBalance: 0,
     createdAt: "2026-04-09T12:15:00.000Z",
   },
   {
@@ -75,6 +94,7 @@ const seedUsers: AdminUserRecord[] = [
     password: "staff123",
     role: UserRole.staff,
     isActive: false,
+    bonusBalance: 0,
     createdAt: "2026-04-11T15:45:00.000Z",
   },
   {
@@ -84,6 +104,7 @@ const seedUsers: AdminUserRecord[] = [
     password: "vendor456",
     role: UserRole.vendor,
     isActive: true,
+    bonusBalance: 0,
     createdAt: "2026-04-18T10:20:00.000Z",
   },
 ];
@@ -379,7 +400,6 @@ export function getAllUserReferralSummary(): UserReferralSummary[] {
       };
       totalReferralVendors: number;
       convertedSubscriptions: number;
-      totalBonus: number;
     }
   >();
 
@@ -390,7 +410,6 @@ export function getAllUserReferralSummary(): UserReferralSummary[] {
         referrer: referral.referrer,
         totalReferralVendors: 0,
         convertedSubscriptions: 0,
-        totalBonus: 0,
       });
     }
 
@@ -399,16 +418,18 @@ export function getAllUserReferralSummary(): UserReferralSummary[] {
     if (referral.payoutStatus === "paid") {
       group.convertedSubscriptions += 1;
     }
-    group.totalBonus += referral.bonusAmount;
   });
 
-  return Array.from(grouped.values()).map((group) => ({
-    userName: group.referrer.fullName,
-    email: group.referrer.email,
-    totalReferralVendors: group.totalReferralVendors,
-    convertedSubscriptions: group.convertedSubscriptions,
-    bonus: group.totalBonus.toFixed(2),
-  }));
+  return Array.from(grouped.values()).map((group) => {
+    const user = state.users.find((u) => u.id === group.referrer.id);
+    return {
+      userName: group.referrer.fullName,
+      email: group.referrer.email,
+      totalReferralVendors: group.totalReferralVendors,
+      convertedSubscriptions: group.convertedSubscriptions,
+      bonus: (user?.bonusBalance ?? 0).toFixed(2),
+    };
+  });
 }
 
 export function getReferralStats() {
@@ -442,4 +463,64 @@ export function getPendingPayouts() {
         user: referral.referredVendor.user,
       },
     }));
+}
+
+export function markReferralAsPaid(
+  referralId: string,
+  adminNote?: string,
+  actorId?: string,
+) {
+  const index = state.referrals.findIndex((r) => r.id === referralId);
+
+  if (index === -1) {
+    return { ok: false as const, message: "Referral not found." };
+  }
+
+  const existing = state.referrals[index];
+
+  if (existing.payoutStatus === "paid") {
+    return {
+      ok: false as const,
+      message: "Referral is already marked as paid.",
+    };
+  }
+
+  const referrerIndex = state.users.findIndex(
+    (user) => user.id === existing.referrerUserId,
+  );
+
+  if (referrerIndex === -1) {
+    return { ok: false as const, message: "Referrer user not found." };
+  }
+
+  const updatedBonusBalance = Math.max(
+    (state.users[referrerIndex].bonusBalance ?? 0) - existing.bonusAmount,
+    0,
+  );
+
+  state.referrals[index] = {
+    ...existing,
+    payoutStatus: "paid",
+    paidAt: new Date().toISOString(),
+    adminNote: adminNote ?? existing.adminNote,
+  };
+
+  state.users[referrerIndex] = {
+    ...state.users[referrerIndex],
+    bonusBalance: updatedBonusBalance,
+  };
+
+  if (actorId) {
+    state.auditLogs = [
+      createAuditLogEntry(
+        actorId,
+        "referral_marked_paid",
+        existing.id,
+        adminNote ?? "Referral marked as paid.",
+      ),
+      ...state.auditLogs,
+    ];
+  }
+
+  return { ok: true as const, referral: state.referrals[index] };
 }

@@ -1,6 +1,25 @@
-import { getPendingPayouts } from "@/lib/mock-db";
+import { NextRequest, NextResponse } from "next/server";
+import { getPendingPayouts, getAdminSessionUser } from "@/lib/mock-db";
+import { getSessionUserIdFromAuthorizationOrCookie } from "@/lib/session";
 
-export async function GET() {
+export const runtime = "nodejs";
+
+function getAuthorizedSuperAdmin(request: NextRequest) {
+  const sessionUserId = getSessionUserIdFromAuthorizationOrCookie(
+    request.headers.get("authorization"),
+    request.cookies.get("super_admin_session")?.value ?? null,
+  );
+
+  return sessionUserId ? getAdminSessionUser(sessionUserId) : null;
+}
+
+export async function GET(request: NextRequest) {
+  const currentUser = getAuthorizedSuperAdmin(request);
+
+  if (!currentUser) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
   const payouts = getPendingPayouts();
-  return Response.json(payouts);
+  return NextResponse.json(payouts);
 }

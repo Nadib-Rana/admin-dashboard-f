@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { api } from "@/lib/api";
 import {
   Form,
   FormControl,
@@ -33,12 +34,10 @@ import {
 } from "@/store/referralSlice";
 
 const markAsPaidSchema = z.object({
-  adminNote: z.string(),
+  adminNote: z.string().optional(),
 });
 
-type MarkAsPaidFormData = {
-  adminNote: string;
-};
+type MarkAsPaidFormData = z.infer<typeof markAsPaidSchema>;
 
 interface MarkAsPaidModalProps {
   isOpen: boolean;
@@ -103,11 +102,10 @@ export function MarkAsPaidModal({
         return;
       }
 
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      await api.patch(`/admin/referral/${referral.id}/mark-paid`, {
+        adminNote: data.adminNote?.trim() || undefined,
+      });
 
-      // Demo mode: directly update Redux state
-      dispatch(updatePayoutInList(referral.id));
       dispatch(setMarkingPaid(false));
 
       toast.success(
